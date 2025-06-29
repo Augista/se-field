@@ -51,7 +51,9 @@ export function BookingForm({
   useEffect(() => {
     async function fetchFields() {
       try {
-        const res = await fetch("https:be-sefield.vercel.app/api/fields", { credentials: "include" })
+        const res = await fetch("https://be-sefield.vercel.app/api/fields", { 
+          method: "GET",
+          credentials: "include" })
         const data = await res.json()
         if (Array.isArray(data)) setFields(data)
         else console.error("Invalid fields data:", data)
