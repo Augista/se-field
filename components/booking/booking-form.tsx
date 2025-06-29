@@ -202,29 +202,6 @@ export function BookingForm({
       const end_time = `${endHour.toString().padStart(2, "0")}:00`
       const payment_deadline = new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 menit ke depan
 
-
-      const response = await fetch (
-        "https://be-sefield.vercel.app/api/bookings",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type" : "application/json",
-          },
-          body: JSON.stringify({
-            field_id: selectedField,
-            booking_date: selectedDate,
-            start_time: selectedTime,
-            end_time,
-            total_price: totalPrice,
-            payment_deadline,
-            user_name: playerName,
-            user_phone: playerPhone,
-            notes: "",
-          })
-        }
-      )
-      const data = await response.json()
-
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       const newBooking: Omit<Booking, "id" | "createdAt"> = {
@@ -240,6 +217,29 @@ export function BookingForm({
         playerPhone,
         playerVirtualAccount: Number.parseInt(playerVirtualAccount),
       }
+
+      const response = await fetch (
+        "https://be-sefield.vercel.app/api/bookings",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type" : "application/json",
+          },
+          body: JSON.stringify({
+            field_id : newBooking.fieldId,
+            user_name : newBooking.playerName,
+            user_phone : newBooking.playerPhone,
+            booking_date : newBooking.date,
+            start_time : newBooking.time,
+            duration : newBooking.duration,
+            virtual_account :newBooking.playerVirtualAccount,
+            price : newBooking.totalPrice,
+            payment_deadline,
+            end_time,
+          })
+        }
+      )
+      const data = await response.json()
 
       onBookingSuccess(newBooking)
       setShowSuccess(true)
