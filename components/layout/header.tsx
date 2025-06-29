@@ -1,12 +1,37 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Menu, X, MapPin } from "lucide-react"
 
+type User = {
+  id: string
+  email: string
+  nama: string
+  role: string
+}
+
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
+
+   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("https://be-sefield.vercel.app/api/auth/me", { 
+          credentials: "include" })
+        const data = await res.json()
+        if (res.ok && data.user) {
+          setUser(data.user)
+        }
+      } catch (error) {
+        console.error("Gagal mengambil user:", error)
+      }
+    }
+
+    fetchUser()
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
@@ -33,13 +58,22 @@ export function Header() {
 
         {/* CTA Buttons */}
         <div className="hidden md:flex items-center space-x-3">
-          <Button variant="outline" className="bg-white text-gray-700 border-gray-300 hover:bg-gray-50">
+      {user ? (
+        <span className="text-gray-700 font-medium">Hi, {user.nama}</span>
+      ) : (
+        <>
+          <Button
+            variant="outline"
+            className="bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+          >
             <Link href="/login">Masuk</Link>
           </Button>
           <Button className="bg-blue-600 hover:bg-blue-700 text-white">
             <Link href="/register">Daftar</Link>
           </Button>
-        </div>
+        </>
+      )}
+    </div>
 
         {/* Mobile Menu Button */}
         <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>

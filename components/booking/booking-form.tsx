@@ -63,12 +63,12 @@ export function BookingForm({
   const [showSuccess, setShowSuccess] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
 
-  // Auto-populate form when field is pre-selected from homepage
-  useEffect(() => {
-    if (preSelectedField && !selectedField) {
-      setSelectedField(preSelectedField.fieldId)
+ useEffect(() => {
+  if (preSelectedField?.fieldId && preSelectedField.fieldId !== selectedField) {
+    setSelectedField(preSelectedField.fieldId)
     }
   }, [preSelectedField, selectedField])
+
 
   const selectedFieldData = useMemo(() => fields.find((field) => field.id === selectedField), [selectedField])
 
@@ -405,7 +405,7 @@ export function BookingForm({
            <div className="space-y-2">
               <Label htmlFor="playerVirtualAccount">Virtual Account payment</Label>
               <Input
-                id="playerPhone"
+                id="playerVirtualAccount"
                 value={playerVirtualAccount}
                 onChange={(e) => setPlayerVirtualAccount(e.target.value)}
                 placeholder="Masukkan nomor bank virtual account"
