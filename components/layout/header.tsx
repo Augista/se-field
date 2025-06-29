@@ -63,17 +63,28 @@ export function Header() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-8">
-          <Link href="/" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-            Beranda
-          </Link>
-          <Link href="/booking" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-            Booking
-          </Link>
-          <Link href="/about" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-            Tentang
-          </Link>
-        </nav>
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link href="/" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+              Beranda
+            </Link>
+            <Link href="/booking" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+              Booking
+            </Link>
+            {user?.role === "admin" && (
+              <>
+                <Link href="/admin/dashboard" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+                  Dashboard
+                </Link>
+                <Link href="/admin/manage" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+                  Manage
+                </Link>
+              </>
+            )}
+            <Link href="/about" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
+              Tentang
+            </Link>
+          </nav>
+
 
         {/* Desktop CTA Buttons */}
         <div className="hidden md:flex items-center space-x-3">
