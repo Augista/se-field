@@ -40,9 +40,15 @@ export default function LoginPage() {
       )
 
       const data = await response.json()
+      const role = data.user?.role
 
       if (response.ok) {
+      
+      if (role === "admin") {
+        router.push("/admin/dashboard")
+      } else {
         router.push("/")
+      }
       } else {
         alert(data.message || "Email atau password salah.")
       }
