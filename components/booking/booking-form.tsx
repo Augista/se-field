@@ -13,37 +13,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CalendarIcon, Clock, MapPin, CheckCircle, AlertTriangle, X, Star } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
+
 import type { Booking, PreSelectedField } from "@/app/booking/page"
 
-const fields = [
-  { id: "1", name: "Lapangan Futsal A", price: 150000, type: "Futsal" },
-  { id: "2", name: "Lapangan Basket Indoor", price: 200000, type: "Basket" },
-  { id: "3", name: "Lapangan Badminton", price: 80000, type: "Badminton" },
-  { id: "4", name: "Lapangan Tenis", price: 120000, type: "Tenis" },
-]
-
-const allTimeSlots = [
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-  "21:00",
-]
-
-interface BookingFormProps {
-  onBookingSuccess: (booking: Omit<Booking, "id" | "createdAt">) => void
-  existingBookings: Booking[]
-  preSelectedField?: PreSelectedField | null
-  onClearPreSelection?: () => void
+interface FieldData {
+  id: string
+  name: string
+  type: string
+  price: number
+  image?: string
 }
 
 export function BookingForm({
@@ -51,117 +29,104 @@ export function BookingForm({
   existingBookings,
   preSelectedField,
   onClearPreSelection,
-}: BookingFormProps) {
+}: {
+  onBookingSuccess: (booking: Omit<Booking, "id" | "createdAt">) => void
+  existingBookings: Booking[]
+  preSelectedField?: PreSelectedField | null
+  onClearPreSelection?: () => void
+}) {
+  const [fields, setFields] = useState<FieldData[]>([])
   const [selectedField, setSelectedField] = useState("")
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedTime, setSelectedTime] = useState("")
   const [duration, setDuration] = useState("1")
   const [playerName, setPlayerName] = useState("")
   const [playerPhone, setPlayerPhone] = useState("")
-  const [playerVirtualAccount, setPlayerVirtualAccount] = useState ("")
+  const [playerVirtualAccount, setPlayerVirtualAccount] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
 
+  // Fetch fields from backend
+  useEffect(() => {
+    async function fetchFields() {
+      try {
+        const res = await fetch("https://be-sefield.vercel.app/api/fields", { 
+          method: "GET",
+          credentials: "include" })
+        const data = await res.json()
+        if (Array.isArray(data)) setFields(data)
+        else console.error("Invalid fields data:", data)
+      } catch (err) {
+        console.error("Failed to fetch fields", err)
+      }
+    }
+    fetchFields()
+  }, [])
 
-  // Auto-populate form when field is pre-selected from homepage
+  // Auto populate if from preSelection
   useEffect(() => {
     if (preSelectedField && !selectedField) {
       setSelectedField(preSelectedField.fieldId)
     }
   }, [preSelectedField, selectedField])
 
-  const selectedFieldData = useMemo(() => fields.find((field) => field.id === selectedField), [selectedField])
+  const selectedFieldData = useMemo(() => fields.find(f => f.id === selectedField), [fields, selectedField])
+  const totalPrice = useMemo(() => selectedFieldData ? selectedFieldData.price * parseInt(duration) : 0, [selectedFieldData, duration])
 
-  const totalPrice = useMemo(
-    () => (selectedFieldData ? selectedFieldData.price * Number.parseInt(duration) : 0),
-    [selectedFieldData, duration],
-  )
+  const allTimeSlots = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00"]
 
-  // Get occupied time slots for selected field and date
-  const getOccupiedSlots = useCallback(
-    (fieldId: string, date: Date) => {
-      const dateStr = format(date, "yyyy-MM-dd")
-      const occupiedSlots: string[] = []
+  const getOccupiedSlots = useCallback((fieldId: string, date: Date) => {
+    const dateStr = format(date, "yyyy-MM-dd")
+    const occupied: string[] = []
 
-      existingBookings.forEach((booking) => {
-        // Skip cancelled bookings
-        if (booking.status === "cancelled") return
-
-        if (booking.fieldId === fieldId && format(booking.date, "yyyy-MM-dd") === dateStr) {
-          const startTime = Number.parseInt(booking.time.split(":")[0])
-
-          // Mark all hours covered by this booking as occupied
-          for (let i = 0; i < booking.duration; i++) {
-            const hour = startTime + i
-            if (hour >= 8 && hour <= 21) {
-              occupiedSlots.push(`${hour.toString().padStart(2, "0")}:00`)
-            }
-          }
+    existingBookings.forEach(b => {
+      if (b.status === "cancelled") return
+      if (b.fieldId === fieldId && format(b.date, "yyyy-MM-dd") === dateStr) {
+        const start = parseInt(b.time.split(":")[0])
+        for (let i = 0; i < b.duration; i++) {
+          const hour = start + i
+          occupied.push(`${hour.toString().padStart(2, "0")}:00`)
         }
-      })
+      }
+    })
 
-      return occupiedSlots
-    },
-    [existingBookings],
-  )
+    return occupied
+  }, [existingBookings])
 
-  // Calculate available time slots
   const availableTimeSlots = useMemo(() => {
     if (selectedField && selectedDate) {
-      const occupiedSlots = getOccupiedSlots(selectedField, selectedDate)
-      return allTimeSlots.filter((slot) => !occupiedSlots.includes(slot))
+      const occupied = getOccupiedSlots(selectedField, selectedDate)
+      return allTimeSlots.filter(slot => !occupied.includes(slot))
     }
     return allTimeSlots
   }, [selectedField, selectedDate, getOccupiedSlots])
 
-  // Check for booking conflicts
-  const checkBookingConflict = useCallback(
-    (fieldId: string, date: Date, time: string, bookingDuration: number) => {
-      const dateStr = format(date, "yyyy-MM-dd")
-      const startTime = Number.parseInt(time.split(":")[0])
-      const endTime = startTime + bookingDuration
+  const checkBookingConflict = useCallback((fieldId: string, date: Date, time: string, dur: number) => {
+    const dateStr = format(date, "yyyy-MM-dd")
+    const start = parseInt(time.split(":")[0])
+    const end = start + dur
 
-      // Find conflicting bookings
-      const conflicts = existingBookings.filter((booking) => {
-        // Skip cancelled bookings
-        if (booking.status === "cancelled") return false
+    return existingBookings.filter(b => {
+      if (b.status === "cancelled") return false
+      if (b.fieldId === fieldId && format(b.date, "yyyy-MM-dd") === dateStr) {
+        const bs = parseInt(b.time.split(":")[0]), be = bs + b.duration
+        return start < be && end > bs
+      }
+      return false
+    })
+  }, [existingBookings])
 
-        // Check same field and same date
-        if (booking.fieldId === fieldId && format(booking.date, "yyyy-MM-dd") === dateStr) {
-          const bookingStartTime = Number.parseInt(booking.time.split(":")[0])
-          const bookingEndTime = bookingStartTime + booking.duration
-
-          // Check time overlap
-          return startTime < bookingEndTime && endTime > bookingStartTime
-        }
-        return false
-      })
-
-      return conflicts
-    },
-    [existingBookings],
-  )
-
-  // Update conflict error when relevant fields change
   useEffect(() => {
     if (selectedField && selectedDate && selectedTime) {
-      const conflicts = checkBookingConflict(selectedField, selectedDate, selectedTime, Number.parseInt(duration))
-
+      const conflicts = checkBookingConflict(selectedField, selectedDate, selectedTime, parseInt(duration))
       if (conflicts.length > 0) {
-        const conflictBooking = conflicts[0]
-        setConflictError(
-          `Waktu ${selectedTime} - ${(Number.parseInt(selectedTime.split(":")[0]) + Number.parseInt(duration)).toString().padStart(2, "0")}:00 sudah dibooking oleh ${conflictBooking.playerName} (${conflictBooking.playerPhone})`,
-        )
-      } else {
-        setConflictError(null)
-      }
-    } else {
-      setConflictError(null)
+        const c = conflicts[0]
+        setConflictError(`Waktu ${selectedTime} - ${(parseInt(selectedTime.split(":")[0])+parseInt(duration)).toString().padStart(2,"0")}:00 sudah dibooking oleh ${c.playerName} (${c.playerPhone})`)
+      } else setConflictError(null)
     }
   }, [selectedField, selectedDate, selectedTime, duration, checkBookingConflict])
 
-  // Clear selected time if it becomes unavailable
   useEffect(() => {
     if (selectedTime && !availableTimeSlots.includes(selectedTime)) {
       setSelectedTime("")
@@ -169,9 +134,7 @@ export function BookingForm({
   }, [availableTimeSlots, selectedTime])
 
   const resetForm = useCallback(() => {
-    if (!preSelectedField) {
-      setSelectedField("")
-    }
+    if (!preSelectedField) setSelectedField("")
     setSelectedDate(undefined)
     setSelectedTime("")
     setDuration("1")
@@ -183,38 +146,64 @@ export function BookingForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!selectedFieldData || !selectedDate) return
 
-    // Final conflict check before submission
-    const conflicts = checkBookingConflict(selectedField, selectedDate, selectedTime, Number.parseInt(duration))
+    const conflicts = checkBookingConflict(selectedField, selectedDate, selectedTime, parseInt(duration))
     if (conflicts.length > 0) {
       setConflictError("Terjadi konflik jadwal. Silakan pilih waktu lain.")
       return
     }
 
+    if (isNaN(Number(playerVirtualAccount))) {
+      alert("Virtual account harus angka!")
+      return
+    }
+
     setIsSubmitting(true)
-
     try {
-      // Simulate API call delay
-
-      const endHour = Number.parseInt(selectedTime.split(":")[0]) + Number.parseInt(duration)
+      const sh = parseInt(selectedTime.split(":")[0])
+      const endHour = sh + parseInt(duration)
       const end_time = `${endHour.toString().padStart(2, "0")}:00`
-      const payment_deadline = new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 menit ke depan
+      const payment_deadline = new Date(Date.now() + 15*60*1000).toISOString()
 
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const body = {
+        field_id: selectedField,
+        user_name: playerName,
+        user_phone: playerPhone,
+        booking_date: selectedDate.toISOString().substring(0,10),
+        start_time: selectedTime,
+        end_time,
+        duration_hour: parseInt(duration),
+        total_price: totalPrice,
+        virtual_account: playerVirtualAccount,
+        payment_deadline,
+      }
 
-      const newBooking: Omit<Booking, "id" | "createdAt"> = {
+      const res = await fetch("https://be-sefield.vercel.app/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert("Booking gagal: "+(data.error||""))
+        return
+      }
+
+      onBookingSuccess({
         fieldName: selectedFieldData.name,
         fieldId: selectedField,
         date: selectedDate,
         time: selectedTime,
-        duration: Number.parseInt(duration),
+        duration: parseInt(duration),
         status: "pending",
         totalPrice,
         paymentStatus: "pending",
         playerName,
         playerPhone,
+        playerVirtualAccount: Number(playerVirtualAccount),
+      })
         playerVirtualAccount: Number.parseInt(playerVirtualAccount),
       }
 
@@ -243,27 +232,19 @@ export function BookingForm({
 
       onBookingSuccess(newBooking)
       setShowSuccess(true)
+      onClearPreSelection?.()
 
-      // Clear pre-selection after successful booking
-      if (onClearPreSelection) {
-        onClearPreSelection()
-      }
-
-      // Reset form after success
       setTimeout(() => {
         setShowSuccess(false)
         resetForm()
       }, 2000)
-    } catch (error) {
-      console.error("Booking error:", error)
+    } catch (err) {
+      console.error(err)
+      alert("Booking error")
     } finally {
       setIsSubmitting(false)
     }
   }
-
-  const occupiedSlots = useMemo(() => {
-    return selectedField && selectedDate ? getOccupiedSlots(selectedField, selectedDate) : []
-  }, [selectedField, selectedDate, getOccupiedSlots])
 
   if (showSuccess) {
     return (
@@ -272,13 +253,8 @@ export function BookingForm({
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-6">
             <CheckCircle className="h-8 w-8 text-green-600" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Booking Berhasil!</h3>
-          <p className="text-gray-600 mb-4">
-            Booking Anda telah berhasil dibuat. Silakan lakukan pembayaran dalam 15 menit.
-          </p>
-          <p className="text-sm text-gray-500">
-            Anda akan dialihkan ke tab "Booking Saya" untuk melihat detail booking...
-          </p>
+          <h3 className="text-xl font-semibold mb-2">Booking Berhasil!</h3>
+          <p>Silakan lakukan pembayaran dalam 15 menit.</p>
         </CardContent>
       </Card>
     )
@@ -288,11 +264,10 @@ export function BookingForm({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-blue-600" />
-          Form Booking Lapangan
+          <MapPin className="h-5 w-5 text-blue-600"/> Form Booking Lapangan
           {preSelectedField && (
             <div className="flex items-center gap-1 ml-2">
-              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+              <Star className="h-4 w-4 text-yellow-500 fill-current"/>
               <span className="text-sm text-yellow-600">Dipilih dari beranda</span>
             </div>
           )}
@@ -303,36 +278,35 @@ export function BookingForm({
             : "Isi form di bawah untuk melakukan booking lapangan"}
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-6 sm:grid-cols-2">
-            {/* Field Selection */}
+            {/* Select Field */}
             <div className="space-y-2">
-              <Label htmlFor="field">Pilih Lapangan</Label>
+              <Label>Pilih Lapangan</Label>
               <Select value={selectedField} onValueChange={setSelectedField} disabled={!!preSelectedField}>
                 <SelectTrigger className={preSelectedField ? "bg-blue-50 border-blue-200" : ""}>
-                  <SelectValue placeholder="Pilih lapangan" />
+                  <SelectValue placeholder="Pilih lapangan"/>
                 </SelectTrigger>
                 <SelectContent>
-                  {fields.map((field) => (
-                    <SelectItem key={field.id} value={field.id}>
-                      {field.name} - Rp {field.price.toLocaleString()}
+                  {fields.map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name} - Rp {f.price.toLocaleString()}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {preSelectedField && (
-                <p className="text-xs text-blue-600">✓ Lapangan sudah dipilih dari halaman beranda</p>
-              )}
+              {preSelectedField && <p className="text-xs text-blue-600">✓ Sudah dipilih dari beranda</p>}
             </div>
 
-            {/* Date Selection */}
+            {/* Date Picker */}
             <div className="space-y-2">
               <Label>Tanggal</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                  <Button variant="outline" className="w-full text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4"/>
                     {selectedDate ? format(selectedDate, "PPP", { locale: id }) : "Pilih tanggal"}
                   </Button>
                 </PopoverTrigger>
@@ -341,62 +315,48 @@ export function BookingForm({
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date()}
-                    initialFocus
+                    disabled={(d) => d < new Date()}
                   />
                 </PopoverContent>
               </Popover>
             </div>
 
-            {/* Time Selection */}
+            {/* Time */}
             <div className="space-y-2">
-              <Label htmlFor="time">Waktu Mulai</Label>
+              <Label>Waktu Mulai</Label>
               <Select value={selectedTime} onValueChange={setSelectedTime}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pilih waktu" />
+                  <SelectValue placeholder="Pilih waktu"/>
                 </SelectTrigger>
                 <SelectContent>
-                  {availableTimeSlots.length > 0 ? (
-                    availableTimeSlots.map((time) => (
-                      <SelectItem key={time} value={time}>
-                        <div className="flex items-center justify-between w-full">
-                          <span>{time}</span>
-                          <span className="text-green-600 text-xs ml-2">✓ Tersedia</span>
-                        </div>
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>
-                      Semua slot sudah terisi
-                    </SelectItem>
-                  )}
+                  {availableTimeSlots.length > 0
+                    ? availableTimeSlots.map(t => (
+                        <SelectItem key={t} value={t}>
+                          <div className="flex justify-between">{t}<span className="text-green-600 text-xs">✓</span></div>
+                        </SelectItem>
+                      ))
+                    : <SelectItem value="" disabled>Semua slot terisi</SelectItem>}
                 </SelectContent>
               </Select>
-
-              {/* Show occupied slots info */}
-              {selectedField && selectedDate && (
-                <div className="text-sm text-gray-500">
-                  {occupiedSlots.length > 0 ? (
-                    <div className="bg-red-50 p-2 rounded text-red-700">
-                      <p className="font-medium">Slot yang sudah terisi:</p>
-                      <p>{occupiedSlots.join(", ")}</p>
-                    </div>
-                  ) : (
-                    <div className="bg-green-50 p-2 rounded text-green-700">
-                      <p>✓ Semua slot tersedia untuk tanggal ini</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              {selectedField && selectedDate && (() => {
+                const occupied = getOccupiedSlots(selectedField, selectedDate);
+                return occupied.length > 0 ? (
+                  <div className="bg-red-50 p-2 rounded text-red-700 text-sm">
+                    <strong>Slot sudah terisi:</strong> {occupied.join(", ")}
+                  </div>
+                ) : (
+                  <div className="bg-green-50 p-2 rounded text-green-700 text-sm">
+                    ✓ Semua slot tersedia
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Duration */}
             <div className="space-y-2">
-              <Label htmlFor="duration">Durasi (Jam)</Label>
+              <Label>Durasi (Jam)</Label>
               <Select value={duration} onValueChange={setDuration}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih durasi" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Durasi"/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">1 Jam</SelectItem>
                   <SelectItem value="2">2 Jam</SelectItem>
@@ -406,104 +366,57 @@ export function BookingForm({
               </Select>
             </div>
 
-            {/* Player Name */}
+            {/* Player details */}
             <div className="space-y-2">
-              <Label htmlFor="playerName">Nama Pemesan</Label>
-              <Input
-                id="playerName"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Masukkan nama lengkap"
-                required
-              />
+              <Label>Nama Pemesan</Label>
+              <Input value={playerName} onChange={e => setPlayerName(e.target.value)} required/>
             </div>
-
-            {/* Player Phone */}
             <div className="space-y-2">
-              <Label htmlFor="playerPhone">Nomor Telepon</Label>
-              <Input
-                id="playerPhone"
-                value={playerPhone}
-                onChange={(e) => setPlayerPhone(e.target.value)}
-                placeholder="Masukkan nomor telepon"
-                required
-              />
+              <Label>Nomor Telepon</Label>
+              <Input value={playerPhone} onChange={e => setPlayerPhone(e.target.value)} required/>
             </div>
-     
-
-           <div className="space-y-2">
-              <Label htmlFor="playerVirtualAccount">Virtual Account payment</Label>
-              <Input
-                id="playerPhone"
-                value={playerVirtualAccount}
-                onChange={(e) => setPlayerVirtualAccount(e.target.value)}
-                placeholder="Masukkan nomor bank virtual account"
-                required
-              />
+            <div className="space-y-2">
+              <Label>Virtual Account</Label>
+              <Input value={playerVirtualAccount} onChange={e => setPlayerVirtualAccount(e.target.value)} required/>
             </div>
           </div>
 
-          {/* Conflict Error Alert */}
           {conflictError && (
             <Alert className="border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800">
-                <div className="flex items-center justify-between">
-                  <span>{conflictError}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConflictError(null)}
-                    className="h-auto p-1 text-red-600 hover:text-red-700"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+              <AlertTriangle className="h-4 w-4 text-red-600"/>
+              <AlertDescription className="text-red-800 flex justify-between">
+                <span>{conflictError}</span>
+                <Button variant="ghost" size="sm" onClick={() => setConflictError(null)}><X/></Button>
               </AlertDescription>
             </Alert>
           )}
 
-          {/* Price Summary */}
           {selectedFieldData && (
-            <div
-              className={`rounded-lg p-4 ${preSelectedField ? "bg-green-50 border border-green-200" : "bg-blue-50"}`}
-            >
-              <h3 className={`font-semibold ${preSelectedField ? "text-green-900" : "text-blue-900"}`}>
-                Ringkasan Booking
-              </h3>
-              <div className={`mt-2 space-y-1 text-sm ${preSelectedField ? "text-green-800" : "text-blue-800"}`}>
+            <div className={`rounded-lg p-4 ${preSelectedField ? "bg-green-50 border-green-200" : "bg-blue-50"}`}>
+              <h3 className={`font-semibold ${preSelectedField ? "text-green-900" : "text-blue-900"}`}>Ringkasan Booking</h3>
+              <div className={`mt-2 text-sm ${preSelectedField ? "text-green-800" : "text-blue-800"}`}>
                 <p>Lapangan: {selectedFieldData.name}</p>
-                <p>Harga per jam: Rp {selectedFieldData.price.toLocaleString()}</p>
-                <p>Durasi: {duration} jam</p>
+                <p>Jenis: {selectedFieldData.type}</p>
+                <p>Harga/jam: Rp {selectedFieldData.price.toLocaleString()}</p>
                 {selectedDate && selectedTime && (
-                  <p>
-                    Jadwal: {format(selectedDate, "PPP", { locale: id })} pukul {selectedTime} -{" "}
-                    {(Number.parseInt(selectedTime.split(":")[0]) + Number.parseInt(duration))
-                      .toString()
-                      .padStart(2, "0")}
-                    :00
-                  </p>
+                  <p>Jadwal: {format(selectedDate, "PPP", { locale: id })} pukul {selectedTime} - {(parseInt(selectedTime.split(":")[0])+parseInt(duration)).toString().padStart(2,"0")}:00</p>
                 )}
                 <p className="font-semibold">Total: Rp {totalPrice.toLocaleString()}</p>
               </div>
             </div>
           )}
 
-          {/* Business Rules Info */}
-          <div className="rounded-lg bg-yellow-50 p-4">
+          <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
             <h3 className="font-semibold text-yellow-900">Ketentuan Booking</h3>
-            <ul className="mt-2 space-y-1 text-sm text-yellow-800">
-              <li>• Pembayaran harus diselesaikan dalam 15 menit setelah booking</li>
-              <li>• Pembatalan dapat dilakukan maksimal 12 jam sebelum jadwal</li>
-              <li>• Reschedule dapat dilakukan maksimal 12 jam sebelum jadwal</li>
-              <li>• Lapangan hanya dapat digunakan sesuai jam operasional</li>
-              <li>• Satu lapangan hanya bisa digunakan oleh satu pengguna dalam waktu yang sama</li>
+            <ul className="list-disc ml-4 mt-2 space-y-1">
+              <li>Pembayaran harus diselesaikan dalam 15 menit setelah booking</li>
+              <li>Pembatalan maksimum 12 jam sebelum jadwal</li>
+              <li>Reschedule maksimum 12 jam sebelum jadwal</li>
+              <li>Lapangan hanya bisa digunakan satu pengguna per waktu</li>
             </ul>
           </div>
 
-          <Button
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700"
+          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700"
             disabled={
               !selectedField ||
               !selectedDate ||
@@ -513,11 +426,11 @@ export function BookingForm({
               !playerVirtualAccount ||
               isSubmitting ||
               !!conflictError
-            }
-          >
-            <Clock className="mr-2 h-4 w-4" />
-            {isSubmitting ? "Memproses Booking..." : "Booking Sekarang"}
+            }>
+            <Clock className="mr-2 h-4 w-4"/>
+            {isSubmitting ? "Memproses..." : "Booking Sekarang"}
           </Button>
+
         </form>
       </CardContent>
     </Card>
