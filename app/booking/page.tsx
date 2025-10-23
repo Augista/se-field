@@ -33,7 +33,7 @@ export interface PreSelectedField {
   fieldId: string;
   fieldName: string;
   fieldType: string;
-  fieldPrice: string;
+  fieldPrice: number;
 }
 
 export default function BookingPage() {
@@ -47,20 +47,27 @@ export default function BookingPage() {
     setIsClient(true);
   }, []);
 
-  useEffect(() => {
-    if (!isClient) return; 
-    const fieldId = searchParams.get('fieldId');
-    const fieldName = searchParams.get('fieldName');
-    const fieldType = searchParams.get('fieldType');
-    const fieldPrice = searchParams.get('fieldPrice');
+useEffect(() => {
+  if (!isClient) return;
+  
+  const fieldId = searchParams.get('fieldId');
+  const fieldName = searchParams.get('fieldName');
+  const fieldType = searchParams.get('fieldType');
+  const fieldPrice = searchParams.get('fieldPrice');
 
-    if (fieldId && fieldName && fieldType && fieldPrice) {
-      setPreSelectedField({ fieldId, fieldName, fieldType, fieldPrice });
-      setActiveTab('new-booking');
-    } else {
-      setPreSelectedField(null);
-    }
-  }, [isClient, searchParams]);
+  if (fieldId && fieldName && fieldType && fieldPrice) {
+    setPreSelectedField({
+      fieldId,
+      fieldName,
+      fieldType,
+      fieldPrice: Number(fieldPrice),
+    });
+    setActiveTab('new-booking');
+  } else {
+    setPreSelectedField(null);
+  }
+}, [isClient, searchParams]);
+
 
   const addBooking = (newBooking: Omit<Booking, 'id' | 'createdAt'>) => {
     const booking: Booking = {
@@ -157,12 +164,13 @@ export default function BookingPage() {
               </TabsList>
 
               <TabsContent value="new-booking">
-                <BookingForm
-                  onBookingSuccess={addBooking}
-                  existingBookings={bookings}
-                  preSelectedField={preSelectedField}
-                  onClearPreSelection={clearPreSelection}
-                />
+              <BookingForm
+                onBookingSuccess={addBooking}
+                existingBookings={bookings}
+                preSelectedField={preSelectedField ?? undefined}
+                onClearPreSelection={clearPreSelection}
+              />
+
               </TabsContent>
 
               <TabsContent value="my-bookings">

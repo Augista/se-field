@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,105 +14,175 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Calendar, Clock, MapPin, RefreshCw, X, User, Phone,Wallet, CheckCircle } from "lucide-react"
-import { format } from "date-fns"
-import { id } from "date-fns/locale"
-import type { Booking } from "@/app/booking/page"
-import { RescheduleDialog } from "./reschedule-dialog"
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import { faMoneyBillWave, faRupiahSign } from "@fortawesome/free-solid-svg-icons"
+} from "@/components/ui/alert-dialog";
+import { Calendar, Clock, MapPin, RefreshCw, X, User, Phone, Wallet, CheckCircle } from "lucide-react";
+import { format } from "date-fns";
+import { id } from "date-fns/locale";
+// import type { Booking } from "@/app/booking/page";
+import { RescheduleDialog } from "./reschedule-dialog";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMoneyBillWave, faRupiahSign } from "@fortawesome/free-solid-svg-icons";
 
-interface BookingListProps {
-  bookings: Booking[]
-  onUpdateBooking: (bookingId: string, updates: Partial<Booking>) => void
+export interface Booking {
+  id: string;
+  fieldName: string;
+  fieldId: string;
+  date: Date;
+  time: string;
+  duration: number;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled';
+  totalPrice: number;
+  paymentStatus: 'pending' | 'paid';
+  playerName: string;
+  playerPhone: string;
+  playerVirtualAccount: number;
+  createdAt: Date;
+  hasBeenRescheduled?: boolean;
 }
 
-export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
-  const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null)
-  const [showRescheduleSuccess, setShowRescheduleSuccess] = useState<string | null>(null)
+export interface BookingListProps {
+  bookings: Booking[];
+  onUpdateBooking?: (bookingId: string, updates: Partial<Booking>) => void;
+}
 
+export function BookingList({ onUpdateBooking }: BookingListProps) {
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
+  const [showRescheduleSuccess, setShowRescheduleSuccess] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const res = await fetch("https://be-sefield.vercel.app/api/bookings", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!res.ok) throw new Error("Gagal mengambil data booking");
+        const data = await res.json();
+        setBookings(data.bookings);
+      } catch (err) {
+        console.error(err);
+        alert(" Gagal memuat daftar booking.");
+      }
+    };
+    fetchBookings();
+  }, []);
+
+
+  const updateBookingStatus = async (bookingId: string, updates: Partial<Booking>) => {
+    const token = localStorage.getItem("authToken");
+    const res = await fetch("https://be-sefield.vercel.app/api/bookings", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ bookingId, updates }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Gagal update booking");
+    
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, ...updates } : b))
+    );
+    return data.booking;
+  };
+
+  const handlePayment = async (bookingId: string) => {
+    try {
+      await updateBookingStatus(bookingId, { paymentStatus: "paid", status: "confirmed" });
+      alert("Pembayaran berhasil! Booking Anda telah dikonfirmasi.");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal memproses pembayaran.");
+    }
+  };
+
+  const handleReschedule = async (bookingId: string, newDate: Date, newTime: string) => {
+    try {
+      await updateBookingStatus(bookingId, {
+        date: newDate,
+        time: newTime,
+        status: "confirmed",
+        hasBeenRescheduled: true,
+      });
+      setShowRescheduleSuccess(bookingId);
+      setTimeout(() => setShowRescheduleSuccess(null), 3000);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menjadwal ulang booking.");
+    }
+  };
+
+  const handleCancel = async (bookingId: string) => {
+    try {
+      await updateBookingStatus(bookingId, { status: "cancelled" });
+      alert("Booking berhasil dibatalkan.");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal membatalkan booking.");
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "confirmed":
-        return <Badge className="bg-green-500 hover:bg-green-600">Dikonfirmasi</Badge>
+        return <Badge className="bg-green-500 hover:bg-green-600">Dikonfirmasi</Badge>;
       case "pending":
-        return <Badge className="bg-yellow-500 hover:bg-yellow-600">Menunggu Pembayaran</Badge>
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600">Menunggu Pembayaran</Badge>;
       case "completed":
-        return <Badge className="bg-blue-500 hover:bg-blue-600">Selesai</Badge>
+        return <Badge className="bg-blue-500 hover:bg-blue-600">Selesai</Badge>;
       case "cancelled":
-        return <Badge className="bg-red-500 hover:bg-red-600">Dibatalkan</Badge>
+        return <Badge className="bg-red-500 hover:bg-red-600">Dibatalkan</Badge>;
       case "rescheduled":
-        return <Badge className="bg-purple-500 hover:bg-purple-600">Dijadwal Ulang</Badge>
+        return <Badge className="bg-purple-500 hover:bg-purple-600">Dijadwal Ulang</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant="secondary">{status}</Badge>;
     }
-  }
+  };
 
   const canCancel = (booking: Booking) => {
-    const bookingDateTime = new Date(booking.date)
-    bookingDateTime.setHours(Number.parseInt(booking.time.split(":")[0]))
-    const now = new Date()
-    const hoursDiff = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-    return hoursDiff > 12 && booking.status !== "completed" && booking.status !== "cancelled"
-  }
+    const bookingDateTime = new Date(booking.date);
+    bookingDateTime.setHours(Number.parseInt(booking.time.split(":")[0]));
+    const now = new Date();
+    const hoursDiff = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return hoursDiff > 12 && booking.status !== "completed" && booking.status !== "cancelled";
+  };
 
   const canReschedule = (booking: Booking) => {
-    const bookingDateTime = new Date(booking.date)
-    bookingDateTime.setHours(Number.parseInt(booking.time.split(":")[0]))
-    const now = new Date()
-    const hoursDiff = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)
-
+    const bookingDateTime = new Date(booking.date);
+    bookingDateTime.setHours(Number.parseInt(booking.time.split(":")[0]));
+    const now = new Date();
+    const hoursDiff = (bookingDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
     return (
       hoursDiff > 12 &&
       booking.paymentStatus === "paid" &&
       booking.status === "confirmed" &&
       !booking.hasBeenRescheduled
-    )
-  }
-
-  const handleCancel = (bookingId: string) => {
-    onUpdateBooking(bookingId, { status: "cancelled" })
-  }
-
-  const handlePayment = (bookingId: string) => {
-    onUpdateBooking(bookingId, { paymentStatus: "paid", status: "confirmed" })
-    alert("Pembayaran berhasil! Booking Anda telah dikonfirmasi.")
-  }
-
-  const handleReschedule = (bookingId: string, newDate: Date, newTime: string) => {
-    onUpdateBooking(bookingId, {
-      date: newDate,
-      time: newTime,
-      status: "confirmed",
-      hasBeenRescheduled: true,
-    })
-
-    setShowRescheduleSuccess(bookingId)
-    setTimeout(() => setShowRescheduleSuccess(null), 3000)
-  }
+    );
+  };
 
   const getTimeRemaining = (booking: Booking) => {
-    if (booking.paymentStatus === "paid" || booking.status === "cancelled") return null
-
-    const createdTime = new Date(booking.createdAt).getTime()
-    const now = new Date().getTime()
-    const elapsed = now - createdTime
-    const remaining = 15 * 60 * 1000 - elapsed
-
+    if (booking.paymentStatus === "paid" || booking.status === "cancelled") return null;
+    const createdTime = new Date(booking.createdAt).getTime();
+    const now = new Date().getTime();
+    const elapsed = now - createdTime;
+    const remaining = 15 * 60 * 1000 - elapsed;
     if (remaining <= 0) {
       if (booking.status === "pending") {
-        onUpdateBooking(booking.id, { status: "cancelled" })
+        updateBookingStatus(booking.id, { status: "cancelled" });
       }
-      return null
+      return null;
     }
+    const minutes = Math.floor(remaining / (60 * 1000));
+    const seconds = Math.floor((remaining % (60 * 1000)) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
-    const minutes = Math.floor(remaining / (60 * 1000))
-    const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`
-  }
-
+  
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -131,8 +201,8 @@ export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
       ) : (
         <div className="grid gap-4">
           {bookings.map((booking) => {
-            const timeRemaining = getTimeRemaining(booking)
-            const isRescheduleSuccess = showRescheduleSuccess === booking.id
+            const timeRemaining = getTimeRemaining(booking);
+            const isRescheduleSuccess = showRescheduleSuccess === booking.id;
 
             return (
               <Card key={booking.id} className="relative">
@@ -166,6 +236,7 @@ export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
                     {getStatusBadge(booking.status)}
                   </div>
                 </CardHeader>
+
                 <CardContent>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="flex items-center gap-2">
@@ -239,11 +310,13 @@ export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Batalkan Booking?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {booking.paymentStatus === "paid"
-                            ? `Apakah Anda yakin ingin membatalkan booking ini? Tindakan ini akan me-refund pembayaran Anda karena sudah lunas, dengan potongan 5% dari total pelunasan. Total refund: Rp${Math.round(booking.totalPrice * 0.95).toLocaleString("id-ID")}`
-                            : `Apakah Anda yakin ingin membatalkan booking ini?`}
-                        </AlertDialogDescription>
+                            <AlertDialogDescription>
+                              {booking.paymentStatus === "paid"
+                                ? `Apakah Anda yakin ingin membatalkan booking ini? Tindakan ini akan me-refund pembayaran Anda karena sudah lunas, dengan potongan 5% dari total pelunasan. Total refund: Rp${Math.round(
+                                    booking.totalPrice * 0.95
+                                  ).toLocaleString("id-ID")}`
+                                : `Apakah Anda yakin ingin membatalkan booking ini?`}
+                            </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Batal</AlertDialogCancel>
@@ -276,12 +349,11 @@ export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
                   )}
                 </CardContent>
               </Card>
-            )
+            );
           })}
         </div>
       )}
 
-      {/* Reschedule Dialog */}
       {rescheduleBooking && (
         <RescheduleDialog
           booking={rescheduleBooking}
@@ -292,5 +364,5 @@ export function BookingList({ bookings, onUpdateBooking }: BookingListProps) {
         />
       )}
     </div>
-  )
+  );
 }

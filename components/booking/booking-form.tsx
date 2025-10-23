@@ -64,12 +64,12 @@ export function BookingForm({
     fetchFields()
   }, [])
 
-  // Auto populate if from preSelection
-  useEffect(() => {
-    if (preSelectedField && !selectedField) {
-      setSelectedField(preSelectedField.fieldId)
-    }
-  }, [preSelectedField, selectedField])
+useEffect(() => {
+  if (preSelectedField?.fieldId && fields.length > 0) {
+    setSelectedField(preSelectedField.fieldId)
+  }
+}, [preSelectedField, fields])
+
 
   const selectedFieldData = useMemo(() => fields.find(f => f.id === selectedField), [fields, selectedField])
   const totalPrice = useMemo(() => selectedFieldData ? selectedFieldData.price * parseInt(duration) : 0, [selectedFieldData, duration])
@@ -94,13 +94,15 @@ export function BookingForm({
     return occupied
   }, [existingBookings])
 
-  const availableTimeSlots = useMemo(() => {
-    if (selectedField && selectedDate) {
-      const occupied = getOccupiedSlots(selectedField, selectedDate)
-      return allTimeSlots.filter(slot => !occupied.includes(slot))
-    }
-    return allTimeSlots
-  }, [selectedField, selectedDate, getOccupiedSlots])
+const availableTimeSlots = useMemo(() => {
+  if (selectedField && selectedDate) {
+    const occupied = getOccupiedSlots(selectedField, selectedDate)
+    return allTimeSlots.filter(slot => !occupied.includes(slot))
+  }
+  if (selectedField && !selectedDate) return allTimeSlots
+  return []
+}, [selectedField, selectedDate, getOccupiedSlots])
+
 
   const checkBookingConflict = useCallback((fieldId: string, date: Date, time: string, dur: number) => {
     const dateStr = format(date, "yyyy-MM-dd")
@@ -297,20 +299,30 @@ export function BookingForm({
             {/* Time */}
             <div className="space-y-2">
               <Label>Waktu Mulai</Label>
-              <Select value={selectedTime} onValueChange={setSelectedTime}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih waktu"/>
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTimeSlots.length > 0
-                    ? availableTimeSlots.map(t => (
-                        <SelectItem key={t} value={t}>
-                          <div className="flex justify-between">{t}<span className="text-green-600 text-xs">✓</span></div>
-                        </SelectItem>
-                      ))
-                    : <SelectItem value="" disabled>Semua slot terisi</SelectItem>}
-                </SelectContent>
-              </Select>
+            <Select
+  value={selectedTime}
+  onValueChange={setSelectedTime}
+  disabled={!selectedField && !preSelectedField}
+>
+              <SelectTrigger>
+                <SelectValue placeholder={!selectedField ? "Pilih lapangan dulu" : "Pilih waktu"} />
+              </SelectTrigger>
+              <SelectContent>
+                {availableTimeSlots.length > 0 ? (
+                  availableTimeSlots.map(t => (
+                    <SelectItem key={t} value={t}>
+                      <div className="flex justify-between">
+                        {t}
+                        <span className="text-green-600 text-xs">✓</span>
+                      </div>
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="Unavailable" disabled>Semua slot terisi</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+
               {selectedField && selectedDate && (() => {
                 const occupied = getOccupiedSlots(selectedField, selectedDate);
                 return occupied.length > 0 ? (
