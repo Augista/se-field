@@ -1,91 +1,96 @@
-"use client"
-import { useState, useEffect, useMemo } from "react"
-import { useSearchParams } from "next/navigation"
-import { Header } from "@/components/layout/header"
-import { Footer } from "@/components/layout/footer"
-import { BookingForm } from "@/components/booking/booking-form"
-import { BookingList } from "@/components/booking/booking-list"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/footer';
+import { BookingForm } from '@/components/booking/booking-form';
+import { BookingList } from '@/components/booking/booking-list';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export interface Booking {
-  id: string
-  fieldName: string
-  fieldId: string
-  date: Date
-  time: string
-  duration: number
-  status: "pending" | "confirmed" | "completed" | "cancelled" | "rescheduled"
-  totalPrice: number
-  paymentStatus: "pending" | "paid"
-  playerName: string
-  playerPhone: string
-  playerVirtualAccount: number
-  createdAt: Date
-  hasBeenRescheduled?: boolean
+  id: string;
+  fieldName: string;
+  fieldId: string;
+  date: Date;
+  time: string;
+  duration: number;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled';
+  totalPrice: number;
+  paymentStatus: 'pending' | 'paid';
+  playerName: string;
+  playerPhone: string;
+  playerVirtualAccount: number;
+  createdAt: Date;
+  hasBeenRescheduled?: boolean;
 }
 
 export interface PreSelectedField {
-  fieldId: string
-  fieldName: string
-  fieldType: string
-  fieldPrice: string
+  fieldId: string;
+  fieldName: string;
+  fieldType: string;
+  fieldPrice: string;
 }
 
 export default function BookingPage() {
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [activeTab, setActiveTab] = useState("new-booking")
-  const [preSelectedField, setPreSelectedField] = useState<PreSelectedField | null>(null)
-  const searchParams = useSearchParams()
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [activeTab, setActiveTab] = useState('new-booking');
+  const [preSelectedField, setPreSelectedField] = useState<PreSelectedField | null>(null);
+  const [isClient, setIsClient] = useState(false); 
+  const searchParams = useSearchParams();
 
-  // Handle pre-selected field from homepage - only run once when params change
   useEffect(() => {
-    const fieldId = searchParams.get("fieldId")
-    const fieldName = searchParams.get("fieldName")
-    const fieldType = searchParams.get("fieldType")
-    const fieldPrice = searchParams.get("fieldPrice")
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return; 
+    const fieldId = searchParams.get('fieldId');
+    const fieldName = searchParams.get('fieldName');
+    const fieldType = searchParams.get('fieldType');
+    const fieldPrice = searchParams.get('fieldPrice');
 
     if (fieldId && fieldName && fieldType && fieldPrice) {
-      setPreSelectedField({
-        fieldId,
-        fieldName,
-        fieldType,
-        fieldPrice,
-      })
-      setActiveTab("new-booking")
+      setPreSelectedField({ fieldId, fieldName, fieldType, fieldPrice });
+      setActiveTab('new-booking');
     } else {
-      setPreSelectedField(null)
+      setPreSelectedField(null);
     }
-  }, [searchParams])
+  }, [isClient, searchParams]);
 
-  const addBooking = (newBooking: Omit<Booking, "id" | "createdAt">) => {
+  const addBooking = (newBooking: Omit<Booking, 'id' | 'createdAt'>) => {
     const booking: Booking = {
       ...newBooking,
       id: Date.now().toString(),
       createdAt: new Date(),
       hasBeenRescheduled: false,
-    }
-    setBookings((prev) => [booking, ...prev])
-    setActiveTab("my-bookings")
-  }
+    };
+    setBookings((prev) => [booking, ...prev]);
+    setActiveTab('my-bookings');
+  };
 
   const updateBooking = (bookingId: string, updates: Partial<Booking>) => {
-    setBookings((prev) => prev.map((booking) => (booking.id === bookingId ? { ...booking, ...updates } : booking)))
-  }
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, ...updates } : b))
+    );
+  };
 
   const clearPreSelection = () => {
-    setPreSelectedField(null)
-    // Clear URL parameters without causing re-render
-    const url = new URL(window.location.href)
-    url.search = ""
-    window.history.replaceState({}, "", url.toString())
-  }
+    setPreSelectedField(null);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.search = '';
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
 
-  // Memoize the booking count to prevent unnecessary re-renders
-  const bookingCount = useMemo(() => bookings.length, [bookings.length])
+  const bookingCount = useMemo(() => bookings.length, [bookings.length]);
+
+  if (!isClient) return null; 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -94,11 +99,15 @@ export default function BookingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
           <div className="mx-auto max-w-6xl">
             <div className="mb-8 text-center">
-              <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">Booking Lapangan</h1>
-              <p className="mt-2 text-lg text-gray-600">Kelola booking dan jadwal lapangan Anda</p>
+              <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+                Booking Lapangan
+              </h1>
+              <p className="mt-2 text-lg text-gray-600">
+                Kelola booking dan jadwal lapangan Anda
+              </p>
             </div>
 
-            {/* Pre-selected Field Alert */}
+            {/* ✅ pre-selected field alert */}
             {preSelectedField && (
               <Alert className="mb-6 border-green-200 bg-green-50">
                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -106,13 +115,20 @@ export default function BookingPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-medium">Lapangan dipilih: </span>
-                      <span className="font-bold">{preSelectedField.fieldName}</span>
+                      <span className="font-bold">
+                        {preSelectedField.fieldName}
+                      </span>
                       <span className="ml-2 text-sm">
-                        ({preSelectedField.fieldType} - Rp {Number(preSelectedField.fieldPrice).toLocaleString()}/jam)
+                        ({preSelectedField.fieldType} - Rp{' '}
+                        {Number(preSelectedField.fieldPrice).toLocaleString()}/jam)
                       </span>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={clearPreSelection}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearPreSelection}
+                      >
                         Ganti Lapangan
                       </Button>
                       <Link href="/">
@@ -150,7 +166,10 @@ export default function BookingPage() {
               </TabsContent>
 
               <TabsContent value="my-bookings">
-                <BookingList bookings={bookings} onUpdateBooking={updateBooking} />
+                <BookingList
+                  bookings={bookings}
+                  onUpdateBooking={updateBooking}
+                />
               </TabsContent>
             </Tabs>
           </div>
@@ -158,5 +177,5 @@ export default function BookingPage() {
       </main>
       <Footer />
     </div>
-  )
+  );
 }
